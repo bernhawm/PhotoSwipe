@@ -1,61 +1,31 @@
-//
-//  ContentView.swift
-//  PhotoSwipe2
-//
-//  Created by Wade Bernhardt on 8/22/25.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
-        }
+        HomeView()
     }
 }
 
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+struct HomeView: View {
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Text("📸 Photo Swipe")
+                    .font(.largeTitle)
+                    .bold()
+                    .padding(.bottom, 40)
+                
+                NavigationLink("Swipe Photos (Newest First)") {
+                    PhotoSwipeView(startFromLast: false)
+                }
+                .buttonStyle(.borderedProminent)
+                
+                NavigationLink("Swipe Photos (Oldest First)") {
+                    PhotoSwipeView(startFromLast: true)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+        }
+    }
 }
