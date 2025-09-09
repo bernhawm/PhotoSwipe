@@ -132,3 +132,37 @@ struct AlbumDetailView: View {
         self.assets = results
     }
 }
+
+// MARK: - Asset Thumbnail Helper
+struct AssetThumbnail: View {
+    let asset: PHAsset
+    @State private var image: UIImage?
+    
+    var body: some View {
+        Group {
+            if let uiImage = image {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.gray.opacity(0.3)
+            }
+        }
+        .onAppear { loadThumbnail() }
+    }
+    
+    private func loadThumbnail() {
+        let manager = PHCachingImageManager.default()
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isSynchronous = false
+        options.isNetworkAccessAllowed = true
+        
+        manager.requestImage(for: asset,
+                             targetSize: CGSize(width: 200, height: 200),
+                             contentMode: .aspectFill,
+                             options: options) { result, _ in
+            if let img = result { self.image = img }
+        }
+    }
+}
