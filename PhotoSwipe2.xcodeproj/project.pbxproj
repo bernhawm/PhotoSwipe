@@ -29,7 +29,35 @@
 		DFABB4AD2E59686900BBB202 /* PhotoSwipe2UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PhotoSwipe2UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DF5F07332E5AA4CF00790F75 /* Exceptions for "PhotoSwipe2UITests" folder in "PhotoSwipe2" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				PhotoSwipe2UITests.swift,
+				PhotoSwipe2UITestsLaunchTests.swift,
+			);
+			target = DFABB4932E59686800BBB202 /* PhotoSwipe2 */;
+		};
+		DF5F07342E5AA4CF00790F75 /* Exceptions for "PhotoSwipe2UITests" folder in "PhotoSwipe2UITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				PhotoSwipe2UITests.swift,
+				PhotoSwipe2UITestsLaunchTests.swift,
+			);
+			target = DFABB4AC2E59686900BBB202 /* PhotoSwipe2UITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		DF5F07302E5AA4CF00790F75 /* PhotoSwipe2UITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DF5F07332E5AA4CF00790F75 /* Exceptions for "PhotoSwipe2UITests" folder in "PhotoSwipe2" target */,
+				DF5F07342E5AA4CF00790F75 /* Exceptions for "PhotoSwipe2UITests" folder in "PhotoSwipe2UITests" target */,
+			);
+			path = PhotoSwipe2UITests;
+			sourceTree = "<group>";
+		};
 		DFABB4962E59686800BBB202 /* PhotoSwipe2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PhotoSwipe2;
@@ -38,11 +66,6 @@
 		DFABB4A62E59686900BBB202 /* PhotoSwipe2Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PhotoSwipe2Tests;
-			sourceTree = "<group>";
-		};
-		DFABB4B02E59686900BBB202 /* PhotoSwipe2UITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = PhotoSwipe2UITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,10 +98,10 @@
 		DFABB48B2E59686800BBB202 = {
 			isa = PBXGroup;
 			children = (
-				DFABB4962E59686800BBB202 /* PhotoSwipe2 */,
 				DFABB4A62E59686900BBB202 /* PhotoSwipe2Tests */,
-				DFABB4B02E59686900BBB202 /* PhotoSwipe2UITests */,
 				DFABB4952E59686800BBB202 /* Products */,
+				DF5F07302E5AA4CF00790F75 /* PhotoSwipe2UITests */,
+				DFABB4962E59686800BBB202 /* PhotoSwipe2 */,
 			);
 			sourceTree = "<group>";
 		};
@@ -108,6 +131,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				DF5F07302E5AA4CF00790F75 /* PhotoSwipe2UITests */,
 				DFABB4962E59686800BBB202 /* PhotoSwipe2 */,
 			);
 			name = PhotoSwipe2;
@@ -152,9 +176,6 @@
 			);
 			dependencies = (
 				DFABB4AF2E59686900BBB202 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				DFABB4B02E59686900BBB202 /* PhotoSwipe2UITests */,
 			);
 			name = PhotoSwipe2UITests;
 			packageProductDependencies = (
@@ -394,11 +415,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = JD3P957DZB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PhotoSwipe;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "This app needs access to delete photos you swipe left on.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to let you swipe through and manage photos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -407,7 +432,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.wabu.PhotoSwipe2;
+				NEW_SETTING = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.wabu.PhotoSwipe;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -421,11 +447,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = JD3P957DZB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PhotoSwipe;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "This app needs access to delete photos you swipe left on.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app needs access to your photo library to let you swipe through and manage photos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -434,7 +464,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.wabu.PhotoSwipe2;
+				NEW_SETTING = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.wabu.PhotoSwipe;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
