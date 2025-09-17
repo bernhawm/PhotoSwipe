@@ -40,7 +40,7 @@ struct HomeView: View {
 
                 // MARK: - Foreground content
                 VStack(spacing: 30) {
-                    Text("Photo Swipe")
+                    Text("PhoFlow")
                         .font(.system(size: 34, weight: .semibold, design: .default)) // more professional
                         .foregroundColor(.white)
                         .shadow(radius: 4)
