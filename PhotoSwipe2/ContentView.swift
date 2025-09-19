@@ -41,7 +41,7 @@ struct HomeView: View {
                 // MARK: - Foreground content
                 VStack(spacing: 30) {
                     Text("PhoFlow")
-                        .font(.system(size: 34, weight: .semibold, design: .default)) // more professional
+                        .font(.system(size: 60, weight: .semibold, design: .default)) // more professional
                         .foregroundColor(.white)
                         .shadow(radius: 4)
                         .padding(.top, 40)
@@ -171,7 +171,7 @@ struct ModernButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(maxWidth: .infinity)
-            .font(.system(size: 18, weight: .medium)) // <-- professional font baked in
+            .font(.system(size: 26, weight: .medium)) // <-- professional font baked in
             .foregroundColor(.white)
             .padding(.vertical, 16)
             .padding(.horizontal, 20)
@@ -206,9 +206,9 @@ struct ModernButtonStyle: ButtonStyle {
             .shadow(color: .black.opacity(configuration.isPressed ? 0.18 : 0.28),
                     radius: configuration.isPressed ? 6 : 10,
                     x: 0, y: configuration.isPressed ? 3 : 6)
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 5)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(.spring(response: 0.35, dampingFraction: 0.5), value: configuration.isPressed)
     }
 }
 

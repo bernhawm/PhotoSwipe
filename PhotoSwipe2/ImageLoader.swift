@@ -17,7 +17,7 @@ class ImageLoader: ObservableObject {
 
     func loadImagesFromBundle() {
         guard let resourcePath = Bundle.main.resourcePath else {
-            print("❌ No resource path found.")
+            print("No resource path found.")
             return
         }
 
@@ -34,11 +34,11 @@ class ImageLoader: ObservableObject {
 
             DispatchQueue.main.async {
                 self.images = loaded
-                print("✅ Preloaded \(loaded.count) images from bundle")
+                print("Preloaded \(loaded.count) images from bundle")
             }
 
         } catch {
-            print("❌ Failed to load images: \(error.localizedDescription)")
+            print("Failed to load images: \(error.localizedDescription)")
         }
     }
 }
