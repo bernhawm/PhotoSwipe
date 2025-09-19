@@ -28,7 +28,7 @@ struct PhotoSwipeView: View {
         VStack {
             // Top bar with counts + Undo
             HStack {
-                Text("🗑 \(deleteList.count)")
+                Text("\(deleteList.count)")
                     .font(.headline)
                     .foregroundColor(.red)
                 Spacer()
@@ -41,7 +41,7 @@ struct PhotoSwipeView: View {
                         .cornerRadius(8)
                 }
                 Spacer()
-                Text("✅ \(keepList.count)")
+                Text("\(keepList.count)")
                     .font(.headline)
                     .foregroundColor(.green)
             }
@@ -76,7 +76,7 @@ struct PhotoSwipeView: View {
                 }
             } else {
                 VStack {
-                    Text("✅ Review complete!")
+                    Text("Review complete!")
                     Button("Delete \(deleteList.count) Photos") {
                         deletePhotos()
                     }
@@ -92,7 +92,7 @@ struct PhotoSwipeView: View {
         .onAppear(perform: requestPhotos)
         .onChange(of: scenePhase) { phase, _ in
             if phase == .background && (!deleteList.isEmpty || !keepList.isEmpty) {
-                print("⚠️ App going to background with unsaved swipes!")
+                print("App going to background with unsaved swipes!")
             }
         }
         .navigationBarBackButtonHidden(true)
@@ -164,7 +164,7 @@ struct PhotoSwipeView: View {
                 }
                 .padding(.horizontal)
 
-                Button("🏠 Go Home") {
+                Button("Go Home") {
                     showDeleteConfirmation = false
                     dismiss()
                 }
@@ -310,7 +310,7 @@ struct PhotoSwipeView: View {
             PHAssetChangeRequest.deleteAssets(assetsToDelete as NSFastEnumeration)
         }) { success, error in
             if success {
-                print("🗑 Deleted successfully")
+                print("Deleted successfully")
                 DispatchQueue.main.async {
                     let idsToDelete = Set(assetsToDelete.map { $0.localIdentifier })
                     self.photos.removeAll { idsToDelete.contains($0.localIdentifier) }
@@ -342,7 +342,7 @@ struct PhotoSwipeView: View {
                     }
                 }
             } else {
-                print("❌ Error deleting: \(String(describing: error))")
+                print("Error deleting: \(String(describing: error))")
                 completion?()
             }
         }
