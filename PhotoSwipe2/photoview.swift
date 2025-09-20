@@ -16,11 +16,15 @@ struct PhotoSwipeView: View {
     @State private var batchSize = 20
     @State private var loadIndex = 0
 
-    // Undo stack (store (asset, image, actionType))
     @State private var lastAction: (PHAsset, UIImage, String)?
-
-    // Show delete-confirmation modal when back is pressed and deleteList not empty
     @State private var showDeleteConfirmation: Bool = false
+
+    // 🔹 NEW: show list modal
+    @State private var showListModal: Bool = false
+    @State private var activeListType: String = "Delete" // "Delete" or "Keep"
+    
+    // 🔹 NEW: selection in modal
+    @State private var selectedAssets: Set<String> = []
 
     var startFromLast: Bool
 
@@ -28,10 +32,18 @@ struct PhotoSwipeView: View {
         VStack {
             // Top bar with counts + Undo
             HStack {
+                // 🔹 Tap to see deleteList
                 Text("\(deleteList.count)")
                     .font(.headline)
                     .foregroundColor(.red)
+                    .onTapGesture {
+                        activeListType = "Delete" // 🔹 NEW
+                        showListModal = true       // 🔹 NEW
+                        selectedAssets.removeAll() // 🔹 NEW
+                    }
+                
                 Spacer()
+                
                 if lastAction != nil {
                     Button("Undo") { undoLastAction() }
                         .padding(.horizontal, 10)
@@ -40,10 +52,18 @@ struct PhotoSwipeView: View {
                         .foregroundColor(.black)
                         .cornerRadius(8)
                 }
+                
                 Spacer()
+                
+                // 🔹 Tap to see keepList
                 Text("\(keepList.count)")
                     .font(.headline)
                     .foregroundColor(.green)
+                    .onTapGesture {
+                        activeListType = "Keep"  // 🔹 NEW
+                        showListModal = true      // 🔹 NEW
+                        selectedAssets.removeAll()// 🔹 NEW
+                    }
             }
             .padding(.horizontal)
 
@@ -51,7 +71,6 @@ struct PhotoSwipeView: View {
 
             if currentIndex < photoImages.count {
                 ZStack {
-                    // Background highlight based on drag
                     if dragOffset.width < -100 {
                         Color.red.opacity(0.3).cornerRadius(12)
                     } else if dragOffset.width > 100 {
@@ -113,71 +132,156 @@ struct PhotoSwipeView: View {
             }
         }
         .sheet(isPresented: $showDeleteConfirmation) {
-            VStack(spacing: 16) {
-                Text("Confirm Deletion")
-                    .font(.headline)
-                    .padding(.top, 12)
+            deleteConfirmationView()
+        }
+        // 🔹 NEW: modal for viewing Delete / Keep lists
+        .sheet(isPresented: $showListModal) {
+            listModalView()
+        }
+    }
 
-                Text("You have \(deleteList.count) photo(s) marked for deletion.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+    // MARK: - List Modal 🔹 NEW
+    @ViewBuilder
+    private func listModalView() -> some View {
+        VStack(spacing: 16) {
+            Text("\(activeListType) Photos")
+                .font(.headline)
+                .padding(.top, 12)
 
-                ScrollView(.horizontal, showsIndicators: true) {
-                    HStack(spacing: 12) {
-                        ForEach(deleteList, id: \.localIdentifier) { asset in
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(spacing: 12) {
+                    let assets = activeListType == "Delete" ? deleteList : keepList
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        VStack {
                             AssetThumbnail(asset: asset)
                                 .frame(width: 100, height: 100)
                                 .cornerRadius(8)
-                                .clipped()
+                                .overlay(
+                                    selectedAssets.contains(asset.localIdentifier) ?
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.blue, lineWidth: 4) : nil
+                                )
+                                .onTapGesture {
+                                    if selectedAssets.contains(asset.localIdentifier) {
+                                        selectedAssets.remove(asset.localIdentifier)
+                                    } else {
+                                        selectedAssets.insert(asset.localIdentifier)
+                                    }
+                                }
+                            Text(activeListType)
+                                .font(.caption)
+                                .foregroundColor(activeListType == "Delete" ? .red : .green)
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                }
-
-                Spacer()
-
-                HStack {
-                    Button("Cancel") {
-                        showDeleteConfirmation = false
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.15))
-                    .cornerRadius(10)
-
-                    Button(action: {
-                        deletePhotos {
-                            DispatchQueue.main.async {
-                                showDeleteConfirmation = false
-                                dismiss()
-                            }
-                        }
-                    }) {
-                        Text("Confirm Deletion")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
                 }
                 .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
 
-                Button("Go Home") {
-                    showDeleteConfirmation = false
-                    dismiss()
+            Spacer()
+
+            HStack {
+                Button("Cancel") {
+                    showListModal = false
+                    selectedAssets.removeAll()
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color.blue)
+                .background(Color.gray.opacity(0.15))
+                .cornerRadius(10)
+
+                Button("Remove Selected") {
+                    removeSelectedFromList()
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.red)
                 .foregroundColor(.white)
                 .cornerRadius(10)
-                .padding(.horizontal)
-                .padding(.bottom, 20)
             }
-            .presentationDetents([.medium, .large])
+            .padding(.horizontal)
+            .padding(.bottom, 20)
         }
+        .presentationDetents([.medium, .large])
+    }
+
+    // 🔹 NEW: remove selected assets from deleteList or keepList
+    private func removeSelectedFromList() {
+        if activeListType == "Delete" {
+            deleteList.removeAll { selectedAssets.contains($0.localIdentifier) }
+        } else {
+            keepList.removeAll { selectedAssets.contains($0.localIdentifier) }
+        }
+        selectedAssets.removeAll()
+        showListModal = false
+    }
+
+    // MARK: - Delete Confirmation
+    private func deleteConfirmationView() -> some View {
+        VStack(spacing: 16) {
+            Text("Confirm Deletion")
+                .font(.headline)
+                .padding(.top, 12)
+
+            Text("You have \(deleteList.count) photo(s) marked for deletion.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(spacing: 12) {
+                    ForEach(deleteList, id: \.localIdentifier) { asset in
+                        AssetThumbnail(asset: asset)
+                            .frame(width: 100, height: 100)
+                            .cornerRadius(8)
+                            .clipped()
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+
+            Spacer()
+
+            HStack {
+                Button("Cancel") {
+                    showDeleteConfirmation = false
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.gray.opacity(0.15))
+                .cornerRadius(10)
+
+                Button(action: {
+                    deletePhotos {
+                        DispatchQueue.main.async {
+                            showDeleteConfirmation = false
+                            dismiss()
+                        }
+                    }
+                }) {
+                    Text("Confirm Deletion")
+                        .frame(maxWidth: .infinity)
+                }
+                .padding()
+                .background(Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.horizontal)
+
+            Button("Go Home") {
+                showDeleteConfirmation = false
+                dismiss()
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .padding(.bottom, 20)
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Request Photos
@@ -348,5 +452,3 @@ struct PhotoSwipeView: View {
         }
     }
 }
-
-
