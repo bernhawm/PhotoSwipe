@@ -7,10 +7,12 @@ enum CollectionNode {
     case album(String, PHAssetCollection, Int)
 }
 
-// MARK: - AlbumOverview with Hierarchy (Photo Albums Only)
+// MARK: - AlbumOverview with Hierarchy & Manage Mode
 struct AlbumOverview: View {
     let parentCollection: PHCollectionList? // nil for root
     @State private var collections: [CollectionNode] = []
+    @State private var manageHierarchyMode: Bool = false
+    @State private var movingAlbum: CollectionNode?
     
     var body: some View {
         List {
@@ -19,27 +21,57 @@ struct AlbumOverview: View {
             }
         }
         .navigationTitle(parentCollection?.localizedTitle ?? "Albums")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(manageHierarchyMode ? "Done" : "Manage") {
+                    manageHierarchyMode.toggle()
+                    movingAlbum = nil
+                }
+            }
+        }
         .onAppear(perform: fetchCollections)
     }
     
-    // MARK: - ViewBuilder to reduce type-check complexity
+    // MARK: - Node View
     @ViewBuilder
     private func nodeView(_ node: CollectionNode) -> some View {
         switch node {
         case .folder(let title, let folder):
-            NavigationLink(destination: AlbumOverview(parentCollection: folder)) {
-                Label(title, systemImage: "folder.fill")
-            }
-            
-        case .album(let title, let collection, let count):
-            NavigationLink(destination: AlbumDetailView(collection: collection)) {
-                HStack {
-                    Label(title, systemImage: "photo.on.rectangle")
-                    Spacer()
-                    Text("\(count)")
-                        .foregroundColor(.secondary)
+            HStack {
+                if manageHierarchyMode, let moving = movingAlbum {
+                    Button("Move Here") {
+                        moveAlbum(moving, into: node)
+                        movingAlbum = nil
+                    }
+                }
+                NavigationLink(destination: AlbumOverview(parentCollection: folder)) {
+                    Label(title, systemImage: "folder.fill")
                 }
             }
+        case .album(let title, let collection, let count):
+            HStack {
+                NavigationLink(destination: AlbumDetailView(collection: collection)) {
+                    HStack {
+                        Label(title, systemImage: "photo.on.rectangle")
+                        Spacer()
+                        Text("\(count)")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                if manageHierarchyMode {
+                    Button("Move") { movingAlbum = node }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+    }
+    
+    private func moveAlbum(_ album: CollectionNode, into folder: CollectionNode) {
+        // Only visual re-ordering in this screen
+        if let index = collections.firstIndex(where: { $0.elementID == album.elementID }) {
+            collections.remove(at: index)
+            collections.insert(album, at: 0)
         }
     }
     
@@ -49,7 +81,6 @@ struct AlbumOverview: View {
         let options = PHFetchOptions()
         
         if let parent = parentCollection {
-            // Fetch sub-folders only
             let subFolders = PHCollectionList.fetchCollections(in: parent, options: nil)
             subFolders.enumerateObjects { collection, _, _ in
                 if let folder = collection as? PHCollectionList {
@@ -63,7 +94,6 @@ struct AlbumOverview: View {
                 }
             }
         } else {
-            // Root: fetch top-level folders + albums
             let topFolders = PHCollectionList.fetchTopLevelUserCollections(with: nil)
             topFolders.enumerateObjects { collection, _, _ in
                 if let folder = collection as? PHCollectionList {
@@ -79,16 +109,11 @@ struct AlbumOverview: View {
         }
         
         self.collections = results.sorted {
-            // Folders first, then albums alphabetically
             switch ($0, $1) {
-            case (.folder(let t1, _), .folder(let t2, _)):
-                return t1 < t2
-            case (.folder, .album):
-                return true
-            case (.album, .folder):
-                return false
-            case (.album(let t1, _, _), .album(let t2, _, _)):
-                return t1 < t2
+            case (.folder(let t1, _), .folder(let t2, _)): return t1 < t2
+            case (.folder, .album): return true
+            case (.album, .folder): return false
+            case (.album(let t1, _, _), .album(let t2, _, _)): return t1 < t2
             }
         }
     }
@@ -106,23 +131,106 @@ extension CollectionNode {
     }
 }
 
-// MARK: - AlbumDetailView (needs to be present)
+// MARK: - AlbumDetailView with Selection
 struct AlbumDetailView: View {
     let collection: PHAssetCollection
     @State private var assets: [PHAsset] = []
+    @State private var selectionMode: Bool = false
+    @State private var selectedAssets: Set<String> = [] // localIdentifiers
+    @State private var actionMode: ActionMode = .none
+    
+    enum ActionMode {
+        case none, remove, delete
+    }
     
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: .init(.flexible()), count: 3), spacing: 2) {
-                ForEach(assets, id: \.localIdentifier) { asset in
-                    AssetThumbnail(asset: asset)
-                        .frame(width: 120, height: 120)
-                        .clipped()
+        VStack {
+            if selectionMode {
+                HStack {
+                    Button("Cancel") {
+                        selectionMode = false
+                        selectedAssets.removeAll()
+                        actionMode = .none
+                    }
+                    Spacer()
+                    Picker("", selection: $actionMode) {
+                        Text("Remove").tag(ActionMode.remove)
+                        Text("Delete").tag(ActionMode.delete)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    
+                    Spacer()
+                    Button("Confirm") { performAction() }
+                        .disabled(selectedAssets.isEmpty || actionMode == .none)
+                }
+                .padding()
+            }
+            
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: .init(.flexible()), count: 3), spacing: 2) {
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        AssetThumbnail(asset: asset,
+                                       isSelected: selectedAssets.contains(asset.localIdentifier),
+                                       actionMode: actionMode)
+                            .frame(width: 120, height: 120)
+                            .clipped()
+                            .onTapGesture {
+                                if selectionMode {
+                                    toggleSelection(asset)
+                                }
+                            }
+                    }
                 }
             }
         }
         .navigationTitle(collection.localizedTitle ?? "Album")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(selectionMode ? "Done" : "Select Photos") {
+                    selectionMode.toggle()
+                    if !selectionMode { selectedAssets.removeAll(); actionMode = .none }
+                }
+            }
+        }
         .onAppear(perform: loadAssets)
+    }
+    
+    private func toggleSelection(_ asset: PHAsset) {
+        if selectedAssets.contains(asset.localIdentifier) {
+            selectedAssets.remove(asset.localIdentifier)
+        } else {
+            selectedAssets.insert(asset.localIdentifier)
+        }
+    }
+    
+    private func performAction() {
+        switch actionMode {
+        case .delete: deleteSelected()
+        case .remove: removeSelectedFromAlbum()
+        default: break
+        }
+    }
+    
+    private func deleteSelected() {
+        let assetsToDelete = assets.filter { selectedAssets.contains($0.localIdentifier) }
+        PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
+        } completionHandler: { success, error in
+            if success { loadAssets(); selectedAssets.removeAll() }
+            else { print("Error deleting: \(error?.localizedDescription ?? "unknown")") }
+        }
+    }
+    
+    private func removeSelectedFromAlbum() {
+        let assetsToRemove = assets.filter { selectedAssets.contains($0.localIdentifier) }
+        PHPhotoLibrary.shared().performChanges {
+            if let request = PHAssetCollectionChangeRequest(for: collection) {
+                request.removeAssets(assetsToRemove as NSArray)
+            }
+        } completionHandler: { success, error in
+            if success { loadAssets(); selectedAssets.removeAll() }
+            else { print("Error removing: \(error?.localizedDescription ?? "unknown")") }
+        }
     }
     
     private func loadAssets() {
@@ -133,22 +241,37 @@ struct AlbumDetailView: View {
     }
 }
 
-// MARK: - Asset Thumbnail Helper
+// MARK: - Asset Thumbnail with Centered Indicator
 struct AssetThumbnail: View {
     let asset: PHAsset
+    var isSelected: Bool = false
+    var actionMode: AlbumDetailView.ActionMode = .none
     @State private var image: UIImage?
     
     var body: some View {
-        Group {
-            if let uiImage = image {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Color.gray.opacity(0.3)
+        ZStack {
+            Group {
+                if let uiImage = image {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color.gray.opacity(0.3)
+                }
+            }
+            .onAppear { loadThumbnail() }
+            
+            if isSelected {
+                Circle()
+                    .fill(actionMode == .delete ? Color.red.opacity(0.7) : Color.yellow.opacity(0.7))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Image(systemName: actionMode == .delete ? "trash.fill" : "minus")
+                            .foregroundColor(.white)
+                            .bold()
+                    )
             }
         }
-        .onAppear { loadThumbnail() }
     }
     
     private func loadThumbnail() {
