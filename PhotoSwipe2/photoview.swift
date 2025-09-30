@@ -5,7 +5,7 @@ import UIKit
 struct PhotoSwipeView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
-
+    
     @State private var dragOffset: CGSize = .zero
     @State private var allFetchedAssets: [PHAsset] = []   // all photos (lazy loaded)
     @State private var photos: [PHAsset] = []             // current batch
@@ -15,31 +15,30 @@ struct PhotoSwipeView: View {
     @State private var photoImages: [UIImage] = []
     @State private var batchSize = 20
     @State private var loadIndex = 0
-
+    
     @State private var lastAction: (PHAsset, UIImage, String)?
     @State private var showDeleteConfirmation: Bool = false
-
-    // 🔹 NEW: show list modal
-    @State private var showListModal: Bool = false
-    @State private var activeListType: String = "Delete" // "Delete" or "Keep"
     
-    // 🔹 NEW: selection in modal
+    @State private var showListModal: Bool = false
+    @State private var activeListType: String = "Delete"
     @State private var selectedAssets: Set<String> = []
-
+    
+    @State private var showMonthBrowser: Bool = false
+    @State private var monthAssets: [String: [PHAsset]] = [:]
+    @State private var selectedMonth: String? = nil
+    
     var startFromLast: Bool
-
+    
     var body: some View {
         VStack {
-            // Top bar with counts + Undo
             HStack {
-                // 🔹 Tap to see deleteList
                 Text("\(deleteList.count)")
                     .font(.headline)
                     .foregroundColor(.red)
                     .onTapGesture {
-                        activeListType = "Delete" // 🔹 NEW
-                        showListModal = true       // 🔹 NEW
-                        selectedAssets.removeAll() // 🔹 NEW
+                        activeListType = "Delete"
+                        showListModal = true
+                        selectedAssets.removeAll()
                     }
                 
                 Spacer()
@@ -55,20 +54,33 @@ struct PhotoSwipeView: View {
                 
                 Spacer()
                 
-                // 🔹 Tap to see keepList
                 Text("\(keepList.count)")
                     .font(.headline)
                     .foregroundColor(.green)
                     .onTapGesture {
-                        activeListType = "Keep"  // 🔹 NEW
-                        showListModal = true      // 🔹 NEW
-                        selectedAssets.removeAll()// 🔹 NEW
+                        activeListType = "Keep"
+                        showListModal = true
+                        selectedAssets.removeAll()
                     }
             }
             .padding(.horizontal)
-
+            
+            Button(action: {
+                buildMonthAssets()
+                showMonthBrowser = true
+            }) {
+                HStack {
+                    Image(systemName: "calendar")
+                    Text("Browse by Month")
+                }
+                .padding(8)
+                .background(Color.blue.opacity(0.2))
+                .cornerRadius(8)
+            }
+            .padding(.top, 4)
+            
             Spacer()
-
+            
             if currentIndex < photoImages.count {
                 ZStack {
                     if dragOffset.width < -100 {
@@ -76,7 +88,7 @@ struct PhotoSwipeView: View {
                     } else if dragOffset.width > 100 {
                         Color.green.opacity(0.3).cornerRadius(12)
                     }
-
+                    
                     Image(uiImage: photoImages[currentIndex])
                         .resizable()
                         .scaledToFit()
@@ -105,7 +117,7 @@ struct PhotoSwipeView: View {
                     .cornerRadius(10)
                 }
             }
-
+            
             Spacer()
         }
         .onAppear(perform: requestPhotos)
@@ -113,6 +125,9 @@ struct PhotoSwipeView: View {
             if phase == .background && (!deleteList.isEmpty || !keepList.isEmpty) {
                 print("App going to background with unsaved swipes!")
             }
+        }
+        .onChange(of: allFetchedAssets) { newAssets, _ in
+            buildMonthAssets()
         }
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -134,20 +149,21 @@ struct PhotoSwipeView: View {
         .sheet(isPresented: $showDeleteConfirmation) {
             deleteConfirmationView()
         }
-        // 🔹 NEW: modal for viewing Delete / Keep lists
         .sheet(isPresented: $showListModal) {
             listModalView()
         }
+        .sheet(isPresented: $showMonthBrowser) {
+            monthBrowserView()
+        }
     }
-
-    // MARK: - List Modal 🔹 NEW
+    
     @ViewBuilder
     private func listModalView() -> some View {
         VStack(spacing: 16) {
             Text("\(activeListType) Photos")
                 .font(.headline)
                 .padding(.top, 12)
-
+            
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 12) {
                     let assets = activeListType == "Delete" ? deleteList : keepList
@@ -177,9 +193,9 @@ struct PhotoSwipeView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
-
+            
             Spacer()
-
+            
             HStack {
                 Button("Cancel") {
                     showListModal = false
@@ -189,7 +205,7 @@ struct PhotoSwipeView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color.gray.opacity(0.15))
                 .cornerRadius(10)
-
+                
                 Button("Remove Selected") {
                     removeSelectedFromList()
                 }
@@ -204,8 +220,7 @@ struct PhotoSwipeView: View {
         }
         .presentationDetents([.medium, .large])
     }
-
-    // 🔹 NEW: remove selected assets from deleteList or keepList
+    
     private func removeSelectedFromList() {
         if activeListType == "Delete" {
             deleteList.removeAll { selectedAssets.contains($0.localIdentifier) }
@@ -215,18 +230,17 @@ struct PhotoSwipeView: View {
         selectedAssets.removeAll()
         showListModal = false
     }
-
-    // MARK: - Delete Confirmation
+    
     private func deleteConfirmationView() -> some View {
         VStack(spacing: 16) {
             Text("Confirm Deletion")
                 .font(.headline)
                 .padding(.top, 12)
-
+            
             Text("You have \(deleteList.count) photo(s) marked for deletion.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-
+            
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 12) {
                     ForEach(deleteList, id: \.localIdentifier) { asset in
@@ -239,9 +253,9 @@ struct PhotoSwipeView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
-
+            
             Spacer()
-
+            
             HStack {
                 Button("Cancel") {
                     showDeleteConfirmation = false
@@ -250,7 +264,7 @@ struct PhotoSwipeView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color.gray.opacity(0.15))
                 .cornerRadius(10)
-
+                
                 Button(action: {
                     deletePhotos {
                         DispatchQueue.main.async {
@@ -268,7 +282,7 @@ struct PhotoSwipeView: View {
                 .cornerRadius(10)
             }
             .padding(.horizontal)
-
+            
             Button("Go Home") {
                 showDeleteConfirmation = false
                 dismiss()
@@ -283,40 +297,38 @@ struct PhotoSwipeView: View {
         }
         .presentationDetents([.medium, .large])
     }
-
-    // MARK: - Request Photos
+    
     private func requestPhotos() {
         PHPhotoLibrary.requestAuthorization { status in
             guard status == .authorized || status == .limited else { return }
-
+            
             let fetchOptions = PHFetchOptions()
             fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: startFromLast)]
             let fetched = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-
+            
             var assets: [PHAsset] = []
             fetched.enumerateObjects { asset, _, _ in assets.append(asset) }
-
+            
             DispatchQueue.main.async {
                 self.allFetchedAssets = assets
                 self.loadNextBatch()
             }
         }
     }
-
-    // MARK: - Load Photos in Batches
+    
     private func loadNextBatch() {
         let endIndex = min(loadIndex + batchSize, allFetchedAssets.count)
         guard loadIndex < endIndex else { return }
-
+        
         let newBatch = Array(allFetchedAssets[loadIndex..<endIndex])
         loadIndex = endIndex
-
+        
         let manager = PHCachingImageManager()
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.isSynchronous = false
         options.isNetworkAccessAllowed = true
-
+        
         for asset in newBatch {
             manager.requestImage(for: asset,
                                  targetSize: CGSize(width: 800, height: 800),
@@ -331,19 +343,18 @@ struct PhotoSwipeView: View {
             }
         }
     }
-
-    // MARK: - Handle Swipe
+    
     private func handleSwipe(_ value: DragGesture.Value) {
         let horizontal = value.translation.width
         let threshold: CGFloat = 120
-
+        
         if horizontal < -threshold { swipeLeft() }
         else if horizontal > threshold { swipeRight() }
         else { skipPhoto() }
-
+        
         dragOffset = .zero
     }
-
+    
     private func swipeLeft() {
         if currentIndex < photos.count {
             let asset = photos[currentIndex]
@@ -353,7 +364,7 @@ struct PhotoSwipeView: View {
         }
         nextPhoto()
     }
-
+    
     private func swipeRight() {
         if currentIndex < photos.count {
             let asset = photos[currentIndex]
@@ -363,23 +374,22 @@ struct PhotoSwipeView: View {
         }
         nextPhoto()
     }
-
+    
     private func skipPhoto() {
         lastAction = nil
         nextPhoto()
     }
-
+    
     private func nextPhoto() {
         currentIndex += 1
         if currentIndex % 10 == 0 {
             loadNextBatch()
         }
     }
-
-    // MARK: - Undo
+    
     private func undoLastAction() {
         guard let action = lastAction else { return }
-
+        
         switch action.2 {
         case "delete":
             if let index = deleteList.firstIndex(of: action.0) {
@@ -391,25 +401,24 @@ struct PhotoSwipeView: View {
             }
         default: break
         }
-
+        
         currentIndex = max(currentIndex - 1, 0)
         if !photos.contains(action.0) {
             photos.insert(action.0, at: currentIndex)
             photoImages.insert(action.1, at: currentIndex)
         }
-
+        
         lastAction = nil
     }
-
-    // MARK: - Delete
+    
     private func deletePhotos(completion: (() -> Void)? = nil) {
         guard !deleteList.isEmpty else {
             completion?()
             return
         }
-
+        
         let assetsToDelete = deleteList
-
+        
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.deleteAssets(assetsToDelete as NSFastEnumeration)
         }) { success, error in
@@ -419,13 +428,13 @@ struct PhotoSwipeView: View {
                     let idsToDelete = Set(assetsToDelete.map { $0.localIdentifier })
                     self.photos.removeAll { idsToDelete.contains($0.localIdentifier) }
                     self.photoImages.removeAll()
-
+                    
                     let manager = PHCachingImageManager()
                     let options = PHImageRequestOptions()
                     options.deliveryMode = .highQualityFormat
                     options.isSynchronous = false
                     options.isNetworkAccessAllowed = true
-
+                    
                     var rebuilt: [UIImage] = []
                     let group = DispatchGroup()
                     for asset in self.photos {
@@ -448,6 +457,104 @@ struct PhotoSwipeView: View {
             } else {
                 print("Error deleting: \(String(describing: error))")
                 completion?()
+            }
+        }
+    }
+    
+    private func buildMonthAssets() {
+        var dict: [String: [PHAsset]] = [:]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        
+        for asset in allFetchedAssets {
+            if let date = asset.creationDate {
+                let key = formatter.string(from: date)
+                dict[key, default: []].append(asset)
+            }
+        }
+        monthAssets = dict
+    }
+    
+    @ViewBuilder
+    private func monthBrowserView() -> some View {
+        NavigationStack {
+            if let month = selectedMonth, let assets = monthAssets[month] {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(assets, id: \.localIdentifier) { asset in
+                            AssetThumbnail(asset: asset)
+                                .frame(width: 100, height: 100)
+                                .cornerRadius(6)
+                                .onTapGesture {
+                                    startQueue(with: assets, startingFrom: asset)
+                                    showMonthBrowser = false
+                                }
+                        }
+                    }
+                    .padding()
+                }
+                .navigationTitle("\(month) (\(assets.count))")
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Back") { selectedMonth = nil }
+                    }
+                }
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                        ForEach(monthAssets.keys.sorted(by: >), id: \.self) { key in
+                            let count = monthAssets[key]?.count ?? 0
+                            Button(action: { selectedMonth = key }) {
+                                VStack {
+                                    Text(key)
+                                        .font(.headline)
+                                    Text("\(count) photos")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 80)
+                                .background(Color.gray.opacity(0.15))
+                                .cornerRadius(10)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .navigationTitle("Browse by Month")
+            }
+        }
+    }
+    
+    private func startQueue(with assets: [PHAsset], startingFrom startAsset: PHAsset) {
+        photos = assets
+        photoImages = Array(repeating: UIImage(), count: assets.count)
+        
+        let manager = PHCachingImageManager()
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isSynchronous = false
+        options.isNetworkAccessAllowed = true
+        
+        let group = DispatchGroup()
+        
+        for (idx, asset) in assets.enumerated() {
+            group.enter()
+            manager.requestImage(for: asset,
+                                 targetSize: CGSize(width: 800, height: 800),
+                                 contentMode: .aspectFit,
+                                 options: options) { image, _ in
+                if let img = image {
+                    photoImages[idx] = img
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) {
+            if let startIndex = assets.firstIndex(of: startAsset) {
+                currentIndex = startIndex
+            } else {
+                currentIndex = 0
             }
         }
     }

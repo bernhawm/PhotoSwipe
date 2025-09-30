@@ -5,7 +5,6 @@ import UIKit
 struct PhotoTaggingView: View {
     @Environment(\.dismiss) var dismiss
 
-    // MARK: - State
     @State private var photos: [PHAsset] = []
     @State private var currentIndex: Int = 0
     @State private var photoImages: [UIImage?] = []
@@ -40,9 +39,31 @@ struct PhotoTaggingView: View {
     var startFromLast: Bool
     private var allImages: [UIImage] { testImages + (photoImages.compactMap { $0 }) }
 
+    @State private var viewMode: ViewMode = .all
+    enum ViewMode { case all, byMonth }
+    @State private var aroundDate: Date = Date()
+    
+    @State private var showMonthBrowser: Bool = false
+    @State private var monthAssets: [String: [PHAsset]] = [:]
+    @State private var selectedMonth: String? = nil
+    
     var body: some View {
         VStack {
-            // Group pill bar (static, no highlight)
+            Picker("", selection: $viewMode) {
+                Text("All").tag(ViewMode.all)
+                Text("By Month").tag(ViewMode.byMonth)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+
+            if viewMode == .byMonth {
+                DatePicker("Month", selection: $aroundDate, displayedComponents: [.date])
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .padding()
+                Button("Load Month") { loadMonthPhotos() }
+            }
+
             HStack {
                 ForEach(0..<groupNames.count, id: \.self) { idx in
                     Text(groupNames[idx])
@@ -55,8 +76,21 @@ struct PhotoTaggingView: View {
                 }
             }
             .padding(.horizontal)
+            
+            Button(action: {
+                buildMonthAssets()
+                showMonthBrowser = true
+            }) {
+                HStack {
+                    Image(systemName: "calendar")
+                    Text("Browse by Month")
+                }
+                .padding(8)
+                .background(Color.blue.opacity(0.2))
+                .cornerRadius(8)
+            }
 
-            // Action buttons
+            .padding(.top, 4)
             HStack {
                 Button("PIA?") {
                     hideAlreadyInAlbums.toggle()
@@ -80,10 +114,8 @@ struct PhotoTaggingView: View {
             }
             .padding(.horizontal)
 
-            // Image display + drag
             if currentIndex < allImages.count {
                 ZStack {
-                    // Background highlight for drag (still kept for visual swipe feedback)
                     if dragDirection == "left" {
                         Color.red.opacity(0.28).cornerRadius(12)
                     } else if dragDirection == "right" {
@@ -117,10 +149,10 @@ struct PhotoTaggingView: View {
                                     dragOffset = .zero
                                     dragDirection = nil
                                 }
+                            
                         )
                         .padding()
 
-                    // "Already in Album" overlay
                     if let currentAsset = assetForDisplay(at: currentIndex),
                        let names = assetAlbumNames[currentAsset.localIdentifier], !names.isEmpty {
                         VStack {
@@ -151,12 +183,13 @@ struct PhotoTaggingView: View {
         .sheet(isPresented: $showAlbumPicker) { albumEditor }
         .sheet(isPresented: $showSaveConfirmation) { saveConfirmationModal }
         .onAppear { loadPhotosAndAlbums() }
+        .onChange(of: photos) { newAssets, _ in
+            buildMonthAssets()
+        }
         .navigationTitle("Photo Tagging")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                
-
                 Button("Albums") { showAlbumPicker = true }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -165,7 +198,6 @@ struct PhotoTaggingView: View {
         }
     }
 
-    // MARK: - Undo
     private func undoLastAction() {
         guard let last = actionStack.popLast() else { return }
         if let idx = groupPhotos[last.groupIndex].firstIndex(where: { $0.localIdentifier == last.asset.localIdentifier }) {
@@ -174,7 +206,6 @@ struct PhotoTaggingView: View {
         if currentIndex > 0 { currentIndex -= 1 }
     }
 
-    // MARK: - Album Editor
     private var albumEditor: some View {
         VStack {
             Text("Edit Groups").font(.headline).padding()
@@ -236,7 +267,6 @@ struct PhotoTaggingView: View {
         }
     }
 
-    // MARK: - Save Confirmation
     private var saveConfirmationModal: some View {
         VStack {
             Text("Confirm Save").font(.headline).padding()
@@ -294,12 +324,12 @@ struct PhotoTaggingView: View {
         .padding()
     }
 
-    // MARK: - Photo Loading
     private func loadPhotosAndAlbums() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
             guard status == .authorized || status == .limited else { return }
             fetchAlbums()
-            loadInitialBatch()
+            if viewMode == .all { loadInitialBatch() }
+            else { loadMonthPhotos() }
         }
     }
 
@@ -313,6 +343,40 @@ struct PhotoTaggingView: View {
             self.photos = []
             self.photoImages = []
             self.loadBatch(startIndex: 0)
+        }
+    }
+
+    private func loadMonthPhotos() {
+        let calendar = Calendar.current
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: aroundDate))!
+        var comps = DateComponents()
+        comps.month = 1
+        comps.day = -1
+        let endOfMonth = calendar.date(byAdding: comps, to: startOfMonth)!
+
+        let opts = PHFetchOptions()
+        opts.predicate = NSPredicate(format: "creationDate >= %@ AND creationDate <= %@", startOfMonth as NSDate, endOfMonth as NSDate)
+        opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+
+        let fetch = PHAsset.fetchAssets(with: .image, options: opts)
+        var arr: [PHAsset] = []
+        fetch.enumerateObjects { a, _, _ in arr.append(a) }
+        DispatchQueue.main.async {
+            self.photos = arr
+            self.photoImages = Array(repeating: nil, count: arr.count)
+            self.currentIndex = 0
+            for (i, asset) in arr.enumerated() {
+                let manager = PHCachingImageManager()
+                let options = PHImageRequestOptions()
+                options.deliveryMode = .highQualityFormat
+                options.isNetworkAccessAllowed = true
+                manager.requestImage(for: asset, targetSize: CGSize(width: 1000, height: 1000),
+                                     contentMode: .aspectFit, options: options) { image, _ in
+                    DispatchQueue.main.async {
+                        if i < self.photoImages.count { self.photoImages[i] = image }
+                    }
+                }
+            }
         }
     }
 
@@ -372,7 +436,6 @@ struct PhotoTaggingView: View {
         if photos.count < allAssets.count { loadBatch(startIndex: photos.count) }
     }
 
-    // MARK: - Swipes
     private func swipeLeft() { handleGroupSwipe(groupIndex: 0) }
     private func swipeCenter() { handleGroupSwipe(groupIndex: 1) }
     private func swipeRight() { handleGroupSwipe(groupIndex: 2) }
@@ -405,7 +468,6 @@ struct PhotoTaggingView: View {
 
     private func skipPhoto() { advanceAfterSwipe() }
 
-    // MARK: - Album Helpers
     private func addToAlbum(index: Int) {
         guard currentIndex < photos.count else { return }
         guard let album = selectedAlbum else { return }
@@ -486,7 +548,10 @@ struct PhotoTaggingView: View {
                 photoImages = updatedImages
                 currentIndex = 0
             }
-        } else { loadInitialBatch() }
+        } else {
+            if viewMode == .all { loadInitialBatch() }
+            else { loadMonthPhotos() }
+        }
     }
 
     private func addAssets(_ assets: [PHAsset], to album: PHAssetCollection?) {
@@ -527,9 +592,105 @@ struct PhotoTaggingView: View {
         guard imageIndex >= 0 && imageIndex < photos.count else { return nil }
         return photos[imageIndex]
     }
+    private func buildMonthAssets() {
+            var dict: [String: [PHAsset]] = [:]
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM"
+            
+            for asset in photos {
+                if let date = asset.creationDate {
+                    let key = formatter.string(from: date)
+                    dict[key, default: []].append(asset)
+                }
+            }
+            monthAssets = dict
+        }
+        
+        @ViewBuilder
+        private func monthBrowserView() -> some View {
+            NavigationStack {
+                if let month = selectedMonth, let assets = monthAssets[month] {
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                            ForEach(assets, id: \.localIdentifier) { asset in
+                                AssetThumbnail(asset: asset)
+                                    .frame(width: 100, height: 100)
+                                    .cornerRadius(6)
+                                    .onTapGesture {
+                                        startQueue(with: assets, startingFrom: asset)
+                                        showMonthBrowser = false
+                                    }
+                            }
+                        }
+                        .padding()
+                    }
+                    .navigationTitle("\(month) (\(assets.count))")
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Back") { selectedMonth = nil }
+                        }
+                    }
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                            ForEach(monthAssets.keys.sorted(by: >), id: \.self) { key in
+                                let count = monthAssets[key]?.count ?? 0
+                                Button(action: { selectedMonth = key }) {
+                                    VStack {
+                                        Text(key)
+                                            .font(.headline)
+                                        Text("\(count) photos")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 80)
+                                    .background(Color.gray.opacity(0.15))
+                                    .cornerRadius(10)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                    .navigationTitle("Browse by Month")
+                }
+            }
+        }
+        
+        private func startQueue(with assets: [PHAsset], startingFrom startAsset: PHAsset) {
+            photos = assets
+            photoImages = Array(repeating: UIImage(), count: assets.count)
+            
+            let manager = PHCachingImageManager()
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .highQualityFormat
+            options.isSynchronous = false
+            options.isNetworkAccessAllowed = true
+            
+            let group = DispatchGroup()
+            
+            for (idx, asset) in assets.enumerated() {
+                group.enter()
+                manager.requestImage(for: asset,
+                                     targetSize: CGSize(width: 800, height: 800),
+                                     contentMode: .aspectFit,
+                                     options: options) { image, _ in
+                    if let img = image {
+                        photoImages[idx] = img
+                    }
+                    group.leave()
+                }
+            }
+            
+            group.notify(queue: .main) {
+                if let startIndex = assets.firstIndex(of: startAsset) {
+                    currentIndex = startIndex
+                } else {
+                    currentIndex = 0
+                }
+            }
+        }
 }
 
-// MARK: - Safe Index Extension
 extension Collection {
     subscript(safe index: Index) -> Element? { indices.contains(index) ? self[index] : nil }
 }
