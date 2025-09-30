@@ -4,6 +4,7 @@ import UIKit
 
 struct PhotoTaggingView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var themeManager: ThemeManager
 
     @State private var photos: [PHAsset] = []
     @State private var currentIndex: Int = 0
@@ -11,7 +12,7 @@ struct PhotoTaggingView: View {
     @State private var testImages: [UIImage] = []
     @State private var hideAlreadyInAlbums = false
 
-    @State private var groupNames: [String] = ["Group Wade", "Group 2", "Group 3"]
+    @State private var groupNames: [String] = ["Albumn1", "Albumn2", "Albumn3"]
     @State private var newGroupNames: [String] = ["", "", ""]
     @State private var groupPhotos: [[PHAsset]] = [[], [], []]
 
@@ -49,12 +50,6 @@ struct PhotoTaggingView: View {
     
     var body: some View {
         VStack {
-            Picker("", selection: $viewMode) {
-                Text("All").tag(ViewMode.all)
-                Text("By Month").tag(ViewMode.byMonth)
-            }
-            .pickerStyle(.segmented)
-            .padding()
 
             if viewMode == .byMonth {
                 DatePicker("Month", selection: $aroundDate, displayedComponents: [.date])
@@ -77,29 +72,10 @@ struct PhotoTaggingView: View {
             }
             .padding(.horizontal)
             
-            Button(action: {
-                buildMonthAssets()
-                showMonthBrowser = true
-            }) {
-                HStack {
-                    Image(systemName: "calendar")
-                    Text("Browse by Month")
-                }
-                .padding(8)
-                .background(Color.blue.opacity(0.2))
-                .cornerRadius(8)
-            }
+
 
             .padding(.top, 4)
             HStack {
-                Button("PIA?") {
-                    hideAlreadyInAlbums.toggle()
-                    filterPhotos()
-                }
-                .padding()
-                .background(hideAlreadyInAlbums ? Color.red : Color.gray.opacity(0.5))
-                .foregroundColor(.white)
-                .cornerRadius(8)
 
                 if !actionStack.isEmpty {
                     Button("Undo Last Swipe") { undoLastAction() }
@@ -182,6 +158,7 @@ struct PhotoTaggingView: View {
         }
         .sheet(isPresented: $showAlbumPicker) { albumEditor }
         .sheet(isPresented: $showSaveConfirmation) { saveConfirmationModal }
+        .sheet(isPresented: $showMonthBrowser) { monthBrowserView() }   // ✅ wired here
         .onAppear { loadPhotosAndAlbums() }
         .onChange(of: photos) { newAssets, _ in
             buildMonthAssets()
@@ -190,8 +167,21 @@ struct PhotoTaggingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Albums") { showAlbumPicker = true }
+                Menu("Options") {
+                    Button("Edit Albums") { showAlbumPicker = true }
+                    Button(hideAlreadyInAlbums ? "Show All Media" : "Hide Items Already in Albums") {
+                        hideAlreadyInAlbums.toggle()
+                        filterPhotos()
+                    }
+
+                    Button("Browse by Month") {
+                        buildMonthAssets()
+                        showMonthBrowser = true
+                    }
+                    
+                }
             }
+
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Save & Exit") { showSaveConfirmation = true }
             }
@@ -328,15 +318,14 @@ struct PhotoTaggingView: View {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
             guard status == .authorized || status == .limited else { return }
             fetchAlbums()
-            if viewMode == .all { loadInitialBatch() }
-            else { loadMonthPhotos() }
+            loadInitialBatch()
         }
     }
 
     private func loadInitialBatch() {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: startFromLast)]
-        let all = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+        let all = PHAsset.fetchAssets(with: fetchOptions)
 
         DispatchQueue.main.async {
             self.allAssets = all

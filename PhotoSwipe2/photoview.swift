@@ -5,7 +5,8 @@ import UIKit
 struct PhotoSwipeView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    
+    @EnvironmentObject var themeManager: ThemeManager
+
     @State private var dragOffset: CGSize = .zero
     @State private var allFetchedAssets: [PHAsset] = []   // all photos (lazy loaded)
     @State private var photos: [PHAsset] = []             // current batch
@@ -32,7 +33,7 @@ struct PhotoSwipeView: View {
     var body: some View {
         VStack {
             HStack {
-                Text("\(deleteList.count)")
+                Text("Delete \(deleteList.count)")
                     .font(.headline)
                     .foregroundColor(.red)
                     .onTapGesture {
@@ -54,7 +55,7 @@ struct PhotoSwipeView: View {
                 
                 Spacer()
                 
-                Text("\(keepList.count)")
+                Text("Keep \(keepList.count)")
                     .font(.headline)
                     .foregroundColor(.green)
                     .onTapGesture {
