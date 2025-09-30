@@ -9,13 +9,19 @@ import UIKit
 
 // MARK: - Entry
 struct ContentView: View {
+    @StateObject private var themeManager = ThemeManager() // root
+
     var body: some View {
         HomeView()
+            .environmentObject(themeManager)
+            .preferredColorScheme(themeManager.colorScheme) // apply globally
     }
 }
 
 // MARK: - HomeView
 struct HomeView: View {
+    @EnvironmentObject var themeManager: ThemeManager // get from root
+
     @State private var photoImages: [UIImage] = []
 
     var body: some View {
@@ -54,12 +60,12 @@ struct HomeView: View {
                         }
                         .buttonStyle(ModernButtonStyle(color: .blue))
 
-                        NavigationLink("Tag Photos") {
+                        NavigationLink("Swipe into Albumns") {
                             PhotoTaggingView(startFromLast: false)
                         }
                         .buttonStyle(ModernButtonStyle(color: .purple))
 
-                        NavigationLink("Albums") {
+                        NavigationLink("Albums Overview") {
                             AlbumOverview(parentCollection: nil)
                         }
                         .buttonStyle(ModernButtonStyle(color: .green))
@@ -93,7 +99,10 @@ struct HomeView: View {
             }
             .onAppear {
                 requestAndLoadPhotos()
+                
             }
+            .environmentObject(themeManager)
+                            .preferredColorScheme(themeManager.colorScheme)
         }
     }
 
@@ -261,6 +270,7 @@ struct InfiniteScrollingBackground: View {
                 }
             }
             .clipped()
+            
         }
     }
 }
@@ -290,12 +300,26 @@ struct CollageGrid: View {
 
 // MARK: - Settings View placeholder
 struct SettingsView: View {
+    @EnvironmentObject var themeManager: ThemeManager
+
     var body: some View {
-        Text("Settings")
-            .font(.largeTitle)
+        VStack(spacing: 20) {
+            Text("Settings")
+                .font(.largeTitle)
+
+            Picker("App Theme", selection: $themeManager.selectedTheme) {
+                Text("System").tag(AppTheme.system)
+                Text("Light").tag(AppTheme.light)
+                Text("Dark").tag(AppTheme.dark)
+            }
+            .pickerStyle(.segmented)
             .padding()
+
+            Spacer()
+        }
     }
 }
+
 
 // MARK: - Previews
 struct ContentView_Previews: PreviewProvider {
