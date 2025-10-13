@@ -28,6 +28,11 @@ struct PhotoSwipeView: View {
     @State private var monthAssets: [String: [PHAsset]] = [:]
     @State private var selectedMonth: String? = nil
     
+    private let keepKey = "keptPhotoIDs"
+    private let deleteKey = "deletedPhotoIDs"
+    private let progressKey = "lastSwipeIndex"
+    @State private var previouslyKeptIDs: Set<String> = []
+
     var startFromLast: Bool
     
     var body: some View {
@@ -121,7 +126,8 @@ struct PhotoSwipeView: View {
             
             Spacer()
         }
-        .onAppear(perform: requestPhotos)
+        .onAppear(perform: loadProgress)
+//        .onAppear(perform: requestPhotos)
         .onChange(of: scenePhase) { phase, _ in
             if phase == .background && (!deleteList.isEmpty || !keepList.isEmpty) {
                 print("App going to background with unsaved swipes!")
@@ -134,7 +140,7 @@ struct PhotoSwipeView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
-                    if deleteList.isEmpty {
+                    if (deleteList.isEmpty && keepList.isEmpty) {
                         dismiss()
                     } else {
                         showDeleteConfirmation = true
@@ -156,6 +162,55 @@ struct PhotoSwipeView: View {
         .sheet(isPresented: $showMonthBrowser) {
             monthBrowserView()
         }
+    }
+    
+    private func saveProgress() {
+        let keptIDs = keepList.map { $0.localIdentifier } + Array(previouslyKeptIDs) // 🔹 UPDATED
+        let deletedIDs = deleteList.map { $0.localIdentifier }
+        UserDefaults.standard.set(keptIDs, forKey: keepKey)
+        UserDefaults.standard.set(deletedIDs, forKey: deleteKey)
+        UserDefaults.standard.set(currentIndex, forKey: progressKey)
+        print("Saved progress: \(keptIDs.count) kept (including previous), \(deletedIDs.count) deleted, index=\(currentIndex)")
+    }
+    
+    private func loadProgress() {
+        // 🔹 Load previously saved IDs first
+        let keptIDs = Set(UserDefaults.standard.stringArray(forKey: keepKey) ?? [])
+        previouslyKeptIDs = keptIDs // 🔹 Save them for filtering
+        let deletedIDs = Set(UserDefaults.standard.stringArray(forKey: deleteKey) ?? [])
+        let savedIndex = UserDefaults.standard.integer(forKey: progressKey)
+        
+        // 🔹 After authorization and photo load, filter out previously kept photos
+        PHPhotoLibrary.requestAuthorization { status in
+            guard status == .authorized || status == .limited else { return }
+            
+            let fetchOptions = PHFetchOptions()
+            fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: startFromLast)]
+            let fetched = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+            
+            var assets: [PHAsset] = []
+            fetched.enumerateObjects { asset, _, _ in
+                if !keptIDs.contains(asset.localIdentifier) { // 🔹 FILTER OUT kept
+                    assets.append(asset)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.allFetchedAssets = assets
+                self.keepList.removeAll() // 🔹 Start clean for new keeps
+                self.deleteList = self.allFetchedAssets.filter { deletedIDs.contains($0.localIdentifier) }
+                self.loadNextBatch()
+                self.currentIndex = min(savedIndex, max(0, self.photoImages.count - 1))
+                print("Loaded progress. Filtered \(keptIDs.count) previously kept photos.")
+            }
+        }
+    }
+    
+    static func resetSavedProgress() {
+        UserDefaults.standard.removeObject(forKey: "keptPhotoIDs")
+        UserDefaults.standard.removeObject(forKey: "deletedPhotoIDs")
+        UserDefaults.standard.removeObject(forKey: "lastSwipeIndex")
+        print("Cleared saved photo progress")
     }
     
     @ViewBuilder
@@ -234,11 +289,11 @@ struct PhotoSwipeView: View {
     
     private func deleteConfirmationView() -> some View {
         VStack(spacing: 16) {
-            Text("Confirm Deletion")
+            Text("Confirm Changes")
                 .font(.headline)
                 .padding(.top, 12)
             
-            Text("You have \(deleteList.count) photo(s) marked for deletion.")
+            Text("Deleted Photos \(deleteList.count) kept Photos \(keepList.count)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
@@ -255,6 +310,18 @@ struct PhotoSwipeView: View {
                 .padding(.vertical, 8)
             }
             
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(spacing: 12) {
+                    ForEach(keepList, id: \.localIdentifier) { asset in
+                        AssetThumbnail(asset: asset)
+                            .frame(width: 100, height: 100)
+                            .cornerRadius(8)
+                            .clipped()
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
             Spacer()
             
             HStack {
@@ -267,6 +334,7 @@ struct PhotoSwipeView: View {
                 .cornerRadius(10)
                 
                 Button(action: {
+                    saveProgress()
                     deletePhotos {
                         DispatchQueue.main.async {
                             showDeleteConfirmation = false
@@ -274,7 +342,7 @@ struct PhotoSwipeView: View {
                         }
                     }
                 }) {
-                    Text("Confirm Deletion")
+                    Text("Confirm Changes")
                         .frame(maxWidth: .infinity)
                 }
                 .padding()

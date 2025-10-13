@@ -60,7 +60,7 @@ struct HomeView: View {
                         }
                         .buttonStyle(ModernButtonStyle(color: .blue))
 
-                        NavigationLink("Swipe into Albumns") {
+                        NavigationLink("Swipe into Albums") {
                             PhotoTaggingView(startFromLast: false)
                         }
                         .buttonStyle(ModernButtonStyle(color: .purple))
@@ -316,6 +316,19 @@ struct SettingsView: View {
             .padding()
 
             Spacer()
+            Button(role: .destructive) {
+                PhotoSwipeView.resetSavedProgress()
+            } label: {
+                HStack {
+                    Image(systemName: "trash.circle.fill")
+                    Text("Reset Swipe Progress")
+                }
+                .foregroundColor(.red)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.red.opacity(0.15))
+                .cornerRadius(10)
+            }
         }
     }
 }

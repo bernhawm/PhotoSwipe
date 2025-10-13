@@ -12,7 +12,7 @@ struct PhotoTaggingView: View {
     @State private var testImages: [UIImage] = []
     @State private var hideAlreadyInAlbums = false
 
-    @State private var groupNames: [String] = ["Albumn1", "Albumn2", "Albumn3"]
+    @State private var groupNames: [String] = UserDefaults.standard.stringArray(forKey: "SavedGroupNames") ?? []
     @State private var newGroupNames: [String] = ["", "", ""]
     @State private var groupPhotos: [[PHAsset]] = [[], [], []]
 
@@ -50,55 +50,100 @@ struct PhotoTaggingView: View {
     
     var body: some View {
         VStack {
-
+            // MARK: - Month Picker Section
             if viewMode == .byMonth {
-                DatePicker("Month", selection: $aroundDate, displayedComponents: [.date])
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
-                    .padding()
-                Button("Load Month") { loadMonthPhotos() }
+                monthPickerSection
             }
 
-            HStack {
-                ForEach(0..<groupNames.count, id: \.self) { idx in
-                    Text(groupNames[idx])
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 10)
-                        .background(Color.gray.opacity(0.2))
-                        .clipShape(Capsule())
-                    if idx < groupNames.count - 1 { Spacer() }
-                }
+            // MARK: - Album Groups Display
+            albumGroupSection
+
+            // MARK: - Undo Section
+            undoSection
+
+            // MARK: - Main Image / Swiping Section
+            mainImageSection
+        }
+        .sheet(isPresented: $showAlbumPicker) { albumEditor }
+        .sheet(isPresented: $showSaveConfirmation) { saveConfirmationModal }
+        .sheet(isPresented: $showMonthBrowser) { monthBrowserView() }
+        .onAppear {
+            if let savedNames = UserDefaults.standard.array(forKey: "SavedGroupNames") as? [String],
+               !savedNames.isEmpty {
+                groupNames = savedNames
+            } else {
+                selectTopThreeAlbums()
             }
-            .padding(.horizontal)
-            
 
-
-            .padding(.top, 4)
-            HStack {
-
-                if !actionStack.isEmpty {
-                    Button("Undo Last Swipe") { undoLastAction() }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.yellow.opacity(0.8))
-                        .foregroundColor(.black)
-                        .cornerRadius(8)
-                }
-
-                Spacer()
+            loadPhotosAndAlbums()
+        }
+        .onChange(of: albums) { _, _ in
+            if groupNames.isEmpty { selectTopThreeAlbums() }
+        }
+        .onChange(of: groupNames) { newValue, _ in
+            UserDefaults.standard.set(newValue, forKey: "SavedGroupNames")
+        }
+        .navigationTitle("Photo Tagging")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) { optionsMenu }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Save & Exit") { showSaveConfirmation = true }
             }
-            .padding(.horizontal)
+        }
+    }
+    
+    // MARK: - Month Picker
+    private var monthPickerSection: some View {
+        VStack {
+            DatePicker("Month", selection: $aroundDate, displayedComponents: [.date])
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .padding(.top)
+            Button("Load Month") { loadMonthPhotos() }
+        }
+    }
 
+    // MARK: - Album Groups Display
+    private var albumGroupSection: some View {
+        HStack {
+            ForEach(Array(groupNames.enumerated()), id: \.offset) { idx, name in
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.gray.opacity(0.2))
+                    .clipShape(Capsule())
+
+                if idx < groupNames.count - 1 { Spacer() }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Undo Section
+    private var undoSection: some View {
+        HStack {
+            if !actionStack.isEmpty {
+                Button("Undo Last Swipe") { undoLastAction() }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.yellow.opacity(0.8))
+                    .foregroundColor(.black)
+                    .cornerRadius(8)
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+    }
+
+    // MARK: - Main Image Section
+    private var mainImageSection: some View {
+        Group {
             if currentIndex < allImages.count {
                 ZStack {
-                    if dragDirection == "left" {
-                        Color.red.opacity(0.28).cornerRadius(12)
-                    } else if dragDirection == "right" {
-                        Color.green.opacity(0.28).cornerRadius(12)
-                    } else if dragDirection == "up" {
-                        Color.blue.opacity(0.28).cornerRadius(12)
-                    }
+                    swipeColorOverlay
 
                     Image(uiImage: allImages[currentIndex])
                         .resizable()
@@ -108,47 +153,10 @@ struct PhotoTaggingView: View {
                         .shadow(radius: 5)
                         .offset(dragOffset)
                         .rotationEffect(.degrees(Double(dragOffset.width / 20)))
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    dragOffset = value.translation
-                                    if abs(value.translation.width) > abs(value.translation.height) {
-                                        dragDirection = value.translation.width > 0 ? "right" : "left"
-                                    } else if value.translation.height < 0 {
-                                        dragDirection = "up"
-                                    } else {
-                                        dragDirection = nil
-                                    }
-                                }
-                                .onEnded { value in
-                                    handleSwipe(value)
-                                    dragOffset = .zero
-                                    dragDirection = nil
-                                }
-                            
-                        )
+                        .gesture(swipeGesture)
                         .padding()
 
-                    if let currentAsset = assetForDisplay(at: currentIndex),
-                       let names = assetAlbumNames[currentAsset.localIdentifier], !names.isEmpty {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                VStack(alignment: .trailing) {
-                                    ForEach(names, id: \.self) { name in
-                                        Text(name)
-                                            .font(.caption2)
-                                            .padding(4)
-                                            .background(Color.black.opacity(0.6))
-                                            .foregroundColor(.white)
-                                            .cornerRadius(6)
-                                    }
-                                }
-                                .padding()
-                            }
-                            Spacer()
-                        }
-                    }
+                    albumTagOverlay
                 }
             } else {
                 Text("Tagging complete!")
@@ -156,38 +164,104 @@ struct PhotoTaggingView: View {
                     .padding()
             }
         }
-        .sheet(isPresented: $showAlbumPicker) { albumEditor }
-        .sheet(isPresented: $showSaveConfirmation) { saveConfirmationModal }
-        .sheet(isPresented: $showMonthBrowser) { monthBrowserView() }   // ✅ wired here
-        .onAppear { loadPhotosAndAlbums() }
-        .onChange(of: photos) { newAssets, _ in
-            buildMonthAssets()
-        }
-        .navigationTitle("Photo Tagging")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Menu("Options") {
-                    Button("Edit Albums") { showAlbumPicker = true }
-                    Button(hideAlreadyInAlbums ? "Show All Media" : "Hide Items Already in Albums") {
-                        hideAlreadyInAlbums.toggle()
-                        filterPhotos()
-                    }
+    }
 
-                    Button("Browse by Month") {
-                        buildMonthAssets()
-                        showMonthBrowser = true
-                    }
-                    
-                }
-            }
-
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Save & Exit") { showSaveConfirmation = true }
+    // MARK: - Color Overlay Based on Swipe Direction
+    private var swipeColorOverlay: some View {
+        Group {
+            if dragDirection == "left" {
+                Color.red.opacity(0.28).cornerRadius(12)
+            } else if dragDirection == "right" {
+                Color.green.opacity(0.28).cornerRadius(12)
+            } else if dragDirection == "up" {
+                Color.blue.opacity(0.28).cornerRadius(12)
+            } else {
+                Color.clear
             }
         }
     }
 
+    // MARK: - Album Tag Overlay
+    private var albumTagOverlay: some View {
+        Group {
+            if let currentAsset = assetForDisplay(at: currentIndex),
+               let names = assetAlbumNames[currentAsset.localIdentifier],
+               !names.isEmpty {
+                VStack {
+                    HStack {
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            ForEach(names, id: \.self) { name in
+                                Text(name)
+                                    .font(.caption2)
+                                    .padding(4)
+                                    .background(Color.black.opacity(0.6))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(6)
+                            }
+                        }
+                        .padding()
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    // MARK: - Swipe Gesture
+    private var swipeGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                dragOffset = value.translation
+                if abs(value.translation.width) > abs(value.translation.height) {
+                    dragDirection = value.translation.width > 0 ? "right" : "left"
+                } else if value.translation.height < 0 {
+                    dragDirection = "up"
+                } else {
+                    dragDirection = nil
+                }
+            }
+            .onEnded { value in
+                handleSwipe(value)
+                dragOffset = .zero
+                dragDirection = nil
+            }
+    }
+
+    // MARK: - Toolbar Menu
+    private var optionsMenu: some View {
+        Menu("Options") {
+            Button("Edit Albums") { showAlbumPicker = true }
+            Button(hideAlreadyInAlbums ? "Show All Media" : "Hide Items Already in Albums") {
+                hideAlreadyInAlbums.toggle()
+                filterPhotos()
+            }
+            Button("Browse by Month") {
+                buildMonthAssets()
+                showMonthBrowser = true
+            }
+        }
+    }
+
+        private func selectTopThreeAlbums() {
+            var albumSizes: [(album: PHAssetCollection, count: Int)] = []
+            for album in albums {
+                let count = PHAsset.fetchAssets(in: album, options: nil).count
+                albumSizes.append((album, count))
+            }
+            let topAlbums = albumSizes.sorted(by: { $0.count > $1.count }).prefix(3)
+            groupNames = topAlbums.map { $0.album.localizedTitle ?? "Untitled" }
+            
+            // Fill to 3 if needed
+            while groupNames.count < 3 { groupNames.append("Album \(groupNames.count + 1)") }
+            
+            UserDefaults.standard.set(groupNames, forKey: "SavedGroupNames")
+        }
+
+    private func saveGroupNames() {
+        UserDefaults.standard.set(groupNames, forKey: "SavedGroupNames")
+    }
+    
     private func undoLastAction() {
         guard let last = actionStack.popLast() else { return }
         if let idx = groupPhotos[last.groupIndex].firstIndex(where: { $0.localIdentifier == last.asset.localIdentifier }) {
@@ -250,6 +324,8 @@ struct PhotoTaggingView: View {
                     }
                     newGroupNames[idx] = ""
                 }
+                UserDefaults.standard.set(groupNames, forKey: "SavedGroupNames")
+                fetchAlbums()
                 showAlbumPicker = false
             }
             .buttonStyle(.borderedProminent)
@@ -582,19 +658,19 @@ struct PhotoTaggingView: View {
         return photos[imageIndex]
     }
     private func buildMonthAssets() {
-            var dict: [String: [PHAsset]] = [:]
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM"
-            
-            for asset in photos {
-                if let date = asset.creationDate {
-                    let key = formatter.string(from: date)
-                    dict[key, default: []].append(asset)
-                }
+        var dict: [String: [PHAsset]] = [:]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM yyyy"  // ✅ Use "Jun 2025" style format
+
+        for asset in photos {
+            if let date = asset.creationDate {
+                let key = formatter.string(from: date)
+                dict[key, default: []].append(asset)
             }
-            monthAssets = dict
         }
-        
+        monthAssets = dict
+    }
+    
         @ViewBuilder
         private func monthBrowserView() -> some View {
             NavigationStack {
