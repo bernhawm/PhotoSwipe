@@ -380,6 +380,9 @@ struct PhotoTaggingView: View {
                 Spacer()
                 Button("Confirm & Save") {
                     saveToSelectedAlbum()
+                    // Save the current group names to UserDefaults
+                       UserDefaults.standard.set(groupNames, forKey: "SavedGroupNames")
+                       
                     showSaveConfirmation = false
                     dismiss()
                 }

@@ -28,6 +28,8 @@ struct PhotoSwipeView: View {
     @State private var monthAssets: [String: [PHAsset]] = [:]
     @State private var selectedMonth: String? = nil
     
+    @State private var showAllPhotos = false
+
     private let keepKey = "keptPhotoIDs"
     private let deleteKey = "deletedPhotoIDs"
     private let progressKey = "lastSwipeIndex"
@@ -59,7 +61,6 @@ struct PhotoSwipeView: View {
                 }
                 
                 Spacer()
-                
                 Text("Keep \(keepList.count)")
                     .font(.headline)
                     .foregroundColor(.green)
@@ -86,7 +87,12 @@ struct PhotoSwipeView: View {
             .padding(.top, 4)
             
             Spacer()
-            
+            Button("Reset Progress", role: .destructive) {
+                        PhotoSwipeView.resetSavedProgress()
+                        showAllPhotos = false
+                        loadProgress()
+                    }
+            Spacer()
             if currentIndex < photoImages.count {
                 ZStack {
                     if dragOffset.width < -100 {
@@ -189,20 +195,31 @@ struct PhotoSwipeView: View {
             let fetched = PHAsset.fetchAssets(with: .image, options: fetchOptions)
             
             var assets: [PHAsset] = []
-            fetched.enumerateObjects { asset, _, _ in
-                if !keptIDs.contains(asset.localIdentifier) { // 🔹 FILTER OUT kept
-                    assets.append(asset)
-                }
-            }
+                    fetched.enumerateObjects { asset, _, _ in
+                        if showAllPhotos {
+                            assets.append(asset)
+                        } else {
+                            // Skip any photo that was previously reviewed (kept or deleted)
+                            if !keptIDs.contains(asset.localIdentifier) && !deletedIDs.contains(asset.localIdentifier) {
+                                assets.append(asset)
+                            }
+                        }
+                    }
+
             
             DispatchQueue.main.async {
-                self.allFetchedAssets = assets
-                self.keepList.removeAll() // 🔹 Start clean for new keeps
-                self.deleteList = self.allFetchedAssets.filter { deletedIDs.contains($0.localIdentifier) }
-                self.loadNextBatch()
-                self.currentIndex = min(savedIndex, max(0, self.photoImages.count - 1))
-                print("Loaded progress. Filtered \(keptIDs.count) previously kept photos.")
-            }
+                       self.allFetchedAssets = assets
+                       self.keepList.removeAll()
+                       self.deleteList.removeAll()
+                       self.loadIndex = 0
+                       self.photoImages.removeAll()
+                       self.photos.removeAll()
+                       self.loadNextBatch()
+                       
+                       self.currentIndex = min(savedIndex, max(0, self.photoImages.count - 1))
+                       
+                       print("Loaded \(assets.count) assets (\(showAllPhotos ? "including reviewed" : "unreviewed only"))")
+                   }
         }
     }
     
@@ -566,6 +583,7 @@ struct PhotoSwipeView: View {
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button("Back") { selectedMonth = nil }
+                        
                     }
                 }
             } else {
