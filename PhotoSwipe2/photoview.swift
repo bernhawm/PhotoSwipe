@@ -28,6 +28,8 @@ struct PhotoSwipeView: View {
     @State private var monthAssets: [String: [PHAsset]] = [:]
     @State private var selectedMonth: String? = nil
     
+    @State private var showAllPhotos = false
+
     private let keepKey = "keptPhotoIDs"
     private let deleteKey = "deletedPhotoIDs"
     private let progressKey = "lastSwipeIndex"
